@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乐天商品爬虫 - 完整版 | Rakuten Scraper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-shadow {
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .result-card {
+            transition: all 0.2s ease;
+        }
+        .truncate-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .log-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .log-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .feature-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 2px;
+            background: #e0e7ff;
+            color: #4338ca;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg text-white py-8">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-center gap-3">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <h1 class="text-3xl font-bold">乐天商品爬虫</h1>
+                <span class="bg-white/20 px-2 py-1 rounded text-sm">完整版</span>
+            </div>
+            <p class="text-center mt-2 text-purple-100">支持 AI特征提取 · 排行榜反查 · 评论分析 · 中日双语</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Config Info -->
+        <div id="configInfo" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-sm">
+            <div class="flex items-center gap-4 flex-wrap">
+                <span class="flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    代理端口: <strong id="proxyPort">-</strong>
+                </span>
+                <span class="flex items-center gap-1">
+                    <span id="aiDot" class="w-2 h-2 rounded-full bg-gray-300"></span>
+                    AI特征提取: <strong id="aiStatus">-</strong>
+                </span>
+                <span class="flex items-center gap-1">
+                    <span id="transDot" class="w-2 h-2 rounded-full bg-gray-300"></span>
+                    翻译功能: <strong id="transStatus">-</strong>
+                </span>
+            </div>
+        </div>
+
+        <!-- Search Form -->
+        <div class="bg-white rounded-2xl card-shadow p-6 mb-8">
+            <form id="searchForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">搜索关键词</label>
+                    <input type="text" id="keyword" placeholder="输入日文关键词，例如：コカコーラ、スチールラック、収納ラック"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition text-lg"
+                           required>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">搜索页数</label>
+                        <select id="pages" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="1">1 页 (~45商品)</option>
+                            <option value="2">2 页 (~90商品)</option>
+                            <option value="3">3 页 (~135商品)</option>
+                            <option value="5">5 页 (~225商品)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">深度抓取数量</label>
+                        <select id="deepLimit" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="3">3 条 (快速测试)</option>
+                            <option value="5" selected>5 条 (推荐)</option>
+                            <option value="10">10 条</option>
+                            <option value="20">20 条</option>
+                            <option value="50">50 条 (较慢)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">翻译选项</label>
+                        <select id="enableTranslate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="1">启用中文翻译</option>
+                            <option value="0">仅日文原版</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn"
+                        class="w-full gradient-bg text-white py-3 px-6 rounded-lg font-semibold text-lg hover:opacity-90 transition flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    开始爬取
+                </button>
+            </form>
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progressSection" class="hidden bg-white rounded-2xl card-shadow p-6 mb-8 fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="loader"></div>
+                    <span class="font-medium text-gray-700" id="progressMessage">准备中...</span>
+                </div>
+                <span class="text-sm text-gray-500" id="progressPercent">0%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3 mb-4">
+                <div id="progressBar" class="gradient-bg h-3 rounded-full progress-bar" style="width: 0%"></div>
+            </div>
+
+            <!-- Logs -->
+            <div class="mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-600">实时日志</span>
+                    <button id="toggleLogs" class="text-xs text-purple-600 hover:underline">展开/收起</button>
+                </div>
+                <div id="logsContainer" class="log-container bg-gray-900 text-green-400 p-3 rounded-lg hidden">
+                    <!-- Logs will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden fade-in">
+            <!-- Stats & Download -->
+            <div class="bg-white rounded-2xl card-shadow p-6 mb-6">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center gap-6">
+                        <div class="text-center">
+                            <div class="text-3xl font-bold text-purple-600" id="resultCount">0</div>
+                            <div class="text-sm text-gray-500">商品数量</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-xl font-bold text-gray-700" id="searchKeyword">-</div>
+                            <div class="text-sm text-gray-500">搜索关键词</div>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <button id="downloadBtnJP"
+                                class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-medium flex items-center gap-2 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                            </svg>
+                            日文版 Excel
+                        </button>
+                        <button id="downloadBtnCN"
+                                class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-medium flex items-center gap-2 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                            </svg>
+                            中文版 Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Grid -->
+            <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Results will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Error Section -->
+        <div id="errorSection" class="hidden bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 fade-in">
+            <div class="flex items-center gap-3 text-red-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="font-medium" id="errorMessage">发生错误</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-6 text-gray-500 text-sm">
+        <p>Rakuten Scraper 完整版 &copy; 2024 | 仅供学习研究使用</p>
+    </footer>
+
+    <script>
+        let currentTaskId = null;
+        let pollInterval = null;
+        let logPollInterval = null;
+        let logsVisible = false;
+
+        const searchForm = document.getElementById('searchForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const progressSection = document.getElementById('progressSection');
+        const progressBar = document.getElementById('progressBar');
+        const progressMessage = document.getElementById('progressMessage');
+        const progressPercent = document.getElementById('progressPercent');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const resultCount = document.getElementById('resultCount');
+        const searchKeyword = document.getElementById('searchKeyword');
+        const downloadBtnJP = document.getElementById('downloadBtnJP');
+        const downloadBtnCN = document.getElementById('downloadBtnCN');
+        const errorSection = document.getElementById('errorSection');
+        const errorMessage = document.getElementById('errorMessage');
+        const logsContainer = document.getElementById('logsContainer');
+        const toggleLogs = document.getElementById('toggleLogs');
+
+        // 加载配置
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                document.getElementById('proxyPort').textContent = config.proxy_port;
+                document.getElementById('aiStatus').textContent = config.ai_enabled ? '已启用' : '未启用';
+                document.getElementById('aiDot').className = `w-2 h-2 rounded-full ${config.ai_enabled ? 'bg-green-500' : 'bg-gray-300'}`;
+                document.getElementById('transStatus').textContent = config.translation_enabled ? '已启用' : '未启用';
+                document.getElementById('transDot').className = `w-2 h-2 rounded-full ${config.translation_enabled ? 'bg-green-500' : 'bg-gray-300'}`;
+            } catch (e) {
+                console.error('Failed to load config:', e);
+            }
+        }
+        loadConfig();
+
+        // 切换日志显示
+        toggleLogs.addEventListener('click', () => {
+            logsVisible = !logsVisible;
+            logsContainer.classList.toggle('hidden', !logsVisible);
+        });
+
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const keyword = document.getElementById('keyword').value.trim();
+            const pages = document.getElementById('pages').value;
+            const deepLimit = document.getElementById('deepLimit').value;
+            const enableTranslate = document.getElementById('enableTranslate').value === '1';
+
+            if (!keyword) {
+                showError('请输入搜索关键词');
+                return;
+            }
+
+            // Reset UI
+            hideError();
+            resultsSection.classList.add('hidden');
+            progressSection.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressPercent.textContent = '0%';
+            progressMessage.textContent = '正在启动爬虫...';
+            logsContainer.innerHTML = '';
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="loader"></div> 处理中...';
+
+            try {
+                const response = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        keyword,
+                        pages: parseInt(pages),
+                        deep_limit: parseInt(deepLimit),
+                        enable_translate: enableTranslate
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    resetForm();
+                    return;
+                }
+
+                currentTaskId = data.task_id;
+                startPolling();
+                startLogPolling();
+
+            } catch (error) {
+                showError('网络错误: ' + error.message);
+                resetForm();
+            }
+        });
+
+        function startPolling() {
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/task/${currentTaskId}`);
+                    const task = await response.json();
+
+                    if (task.error) {
+                        stopPolling();
+                        showError(task.error);
+                        resetForm();
+                        return;
+                    }
+
+                    // Update progress
+                    progressBar.style.width = task.progress + '%';
+                    progressPercent.textContent = task.progress + '%';
+                    progressMessage.textContent = task.message;
+
+                    if (task.status === 'completed') {
+                        stopPolling();
+                        showResults(task);
+                        resetForm();
+                    } else if (task.status === 'error') {
+                        stopPolling();
+                        showError(task.message);
+                        resetForm();
+                    }
+                } catch (error) {
+                    stopPolling();
+                    showError('轮询错误: ' + error.message);
+                    resetForm();
+                }
+            }, 1000);
+        }
+
+        function startLogPolling() {
+            logPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/logs/${currentTaskId}`);
+                    const data = await response.json();
+
+                    if (data.logs && data.logs.length > 0) {
+                        logsContainer.innerHTML = data.logs.map(log => `<div>${escapeHtml(log)}</div>`).join('');
+                        logsContainer.scrollTop = logsContainer.scrollHeight;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }, 1500);
+        }
+
+        function stopPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+            if (logPollInterval) {
+                clearInterval(logPollInterval);
+                logPollInterval = null;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showResults(task) {
+            progressSection.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+
+            resultCount.textContent = task.result_count;
+            searchKeyword.textContent = task.keyword;
+
+            resultsGrid.innerHTML = '';
+
+            task.results.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'result-card bg-white rounded-xl card-shadow overflow-hidden';
+
+                const imgSrc = item.主图 && item.主图 !== 'N/A' ? item.主图 : 'https://via.placeholder.com/300x200?text=No+Image';
+                const price = item.价格 ? `¥${item.价格.toLocaleString()}` : 'N/A';
+                const rating = item.评分 && item.评分 !== '0.0' ? `★ ${item.评分}` : '';
+                const reviews = item.评论数 ? `(${item.评论数}件)` : '';
+
+                // 特征标签
+                let featureTags = '';
+                for (let i = 1; i <= 9; i++) {
+                    const feat = item[`特征${i}`];
+                    if (feat && feat.trim()) {
+                        featureTags += `<span class="feature-tag">${escapeHtml(feat)}</span>`;
+                    }
+                }
+
+                card.innerHTML = `
+                    <div class="relative">
+                        <img src="${imgSrc}" alt="${escapeHtml(item.标题)}" class="w-full h-48 object-contain bg-gray-100"
+                             onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
+                        <div class="absolute top-2 left-2 bg-purple-600 text-white text-xs px-2 py-1 rounded">
+                            #${index + 1}
+                        </div>
+                        ${item.有无视频 === '有' ? '<div class="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">🎬 视频</div>' : ''}
+                    </div>
+                    <div class="p-4">
+                        <h3 class="font-medium text-gray-800 truncate-2 text-sm mb-2" title="${escapeHtml(item.标题)}">${escapeHtml(item.标题)}</h3>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xl font-bold text-red-600">${price}</span>
+                            <span class="text-sm text-yellow-600">${rating} ${reviews}</span>
+                        </div>
+                        <div class="text-xs text-gray-500 mb-2">${escapeHtml(item.品牌 || 'N/A')}</div>
+                        ${item.小类排名 ? `<div class="text-xs text-blue-600 mb-1">📊 ${escapeHtml(item.小类排名)}</div>` : ''}
+                        ${item.上线时长 && item.上线时长 !== '...' ? `<div class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded inline-block mb-2">上线: ${escapeHtml(item.上线时长)}</div>` : ''}
+                        ${featureTags ? `<div class="mt-2 flex flex-wrap">${featureTags}</div>` : ''}
+                    </div>
+                `;
+
+                resultsGrid.appendChild(card);
+            });
+        }
+
+        function showError(message) {
+            progressSection.classList.add('hidden');
+            errorSection.classList.remove('hidden');
+            errorMessage.textContent = message;
+        }
+
+        function hideError() {
+            errorSection.classList.add('hidden');
+        }
+
+        function resetForm() {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                开始爬取
+            `;
+        }
+
+        downloadBtnJP.addEventListener('click', () => {
+            if (currentTaskId) {
+                window.location.href = `/api/download/${currentTaskId}/jp`;
+            }
+        });
+
+        downloadBtnCN.addEventListener('click', () => {
+            if (currentTaskId) {
+                window.location.href = `/api/download/${currentTaskId}/cn`;
+            }
+        });
+    </script>
+</body>
+</html>
