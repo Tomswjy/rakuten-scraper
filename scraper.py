@@ -20,6 +20,10 @@ PROXY_PORT = 7897
 # 深度抓取限制 (None=抓取本页全部, 5=只测前5个)
 DEEP_SCRAPE_LIMIT = 5
 
+# 检测是否在云端运行（Vercel/Railway等），云端不使用代理
+IS_CLOUD = os.environ.get('VERCEL') or os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER')
+USE_PROXY = not IS_CLOUD
+
 # ==================== 🤖 AI配置 ====================
 # API Key 从环境变量获取，或直接填写
 AI_API_KEY = "sk-w8xPygiSwsGuoN5yeddcH373PofeRw5Vxcb3yhPmD92ga2UL"
@@ -28,17 +32,21 @@ AI_MODEL = "Qwen3-VL-235B-A22B-Instruct"
 # 是否启用AI提取特征 (如果API Key为空则自动禁用)
 USE_AI_FEATURES = bool(AI_API_KEY)
 
-# 初始化AI客户端（走代理访问API）
+# 初始化AI客户端
 import httpx
 
 ai_client = None
 if AI_API_KEY:
     try:
-        # 创建走代理的 http 客户端
-        http_client = httpx.Client(
-            timeout=60.0,
-            proxy=f"http://127.0.0.1:{PROXY_PORT}"
-        )
+        # 根据环境决定是否使用代理
+        if USE_PROXY:
+            http_client = httpx.Client(
+                timeout=60.0,
+                proxy=f"http://127.0.0.1:{PROXY_PORT}"
+            )
+        else:
+            http_client = httpx.Client(timeout=60.0)
+        
         ai_client = OpenAI(
             api_key=AI_API_KEY,
             base_url=AI_BASE_URL,
@@ -60,10 +68,16 @@ DOWNLOAD_IMAGES = True
 IMAGE_FOLDER = "product_images"
 # ====================================================
 
-proxies = {
-    "http": f"http://127.0.0.1:{PROXY_PORT}",
-    "https": f"http://127.0.0.1:{PROXY_PORT}"
-}
+# 根据环境决定是否使用代理
+if USE_PROXY:
+    proxies = {
+        "http": f"http://127.0.0.1:{PROXY_PORT}",
+        "https": f"http://127.0.0.1:{PROXY_PORT}"
+    }
+    print(f"📡 使用本地代理: 127.0.0.1:{PROXY_PORT}")
+else:
+    proxies = None
+    print("☁️ 云端环境，不使用代理")
 
 
 def safe_translate(text):
